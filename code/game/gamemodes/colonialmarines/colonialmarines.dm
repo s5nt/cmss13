@@ -19,6 +19,11 @@
 	var/list/running_round_stats = list()
 	var/list/lz_smoke = list()
 
+	/**
+	 * How long, after first drop, should the resin protection in proximity to the selected LZ last
+	 */
+	var/near_lz_protection_delay = 8 MINUTES
+
 ////////////////////////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////////////
 
@@ -89,7 +94,7 @@
 			new type_to_spawn(T)
 
 	//desert river test
-	if(!round_toxic_river.len)
+	if(!length(round_toxic_river))
 		round_toxic_river = null //No tiles?
 	else
 		round_time_river = rand(-100,100)
@@ -100,7 +105,7 @@
 	var/obj/structure/tunnel/T
 	var/i = 0
 	var/turf/t
-	while(GLOB.xeno_tunnels.len && i++ < 3)
+	while(length(GLOB.xeno_tunnels) && i++ < 3)
 		t = get_turf(pick_n_take(GLOB.xeno_tunnels))
 		T = new(t)
 		T.id = "hole[i]"
@@ -140,27 +145,41 @@
 	var/right = marine_dropship.x + marine_dropship.dwidth + 2
 	var/z = marine_dropship.z
 
+	var/dropship_type = marine_dropship.type
+
 	// Bottom left
-	options += get_valid_sentry_turfs(left, bottom, z, width=5, height=2, structures_to_ignore=structures_to_break)
-	options += get_valid_sentry_turfs(left, bottom + 2, z, width=2, height=6, structures_to_ignore=structures_to_break)
+	if(GLOB.sentry_spawns[dropship_type]?[SENTRY_BOTTOM_LEFT])
+		options += GLOB.sentry_spawns[dropship_type][SENTRY_BOTTOM_LEFT]
+	else
+		options += get_valid_sentry_turfs(left, bottom, z, width=5, height=2, structures_to_ignore=structures_to_break)
+		options += get_valid_sentry_turfs(left, bottom + 2, z, width=2, height=6, structures_to_ignore=structures_to_break)
 	spawn_lz_sentry(pick(options), structures_to_break)
 
 	// Bottom right
 	options.Cut()
-	options += get_valid_sentry_turfs(right-4, bottom, z, width=5, height=2, structures_to_ignore=structures_to_break)
-	options += get_valid_sentry_turfs(right-1, bottom + 2, z, width=2, height=6, structures_to_ignore=structures_to_break)
+	if(GLOB.sentry_spawns[dropship_type]?[SENTRY_BOTTOM_RIGHT])
+		options += GLOB.sentry_spawns[dropship_type][SENTRY_BOTTOM_RIGHT]
+	else
+		options += get_valid_sentry_turfs(right-4, bottom, z, width=5, height=2, structures_to_ignore=structures_to_break)
+		options += get_valid_sentry_turfs(right-1, bottom + 2, z, width=2, height=6, structures_to_ignore=structures_to_break)
 	spawn_lz_sentry(pick(options), structures_to_break)
 
 	// Top left
 	options.Cut()
-	options += get_valid_sentry_turfs(left, top-1, z, width=5, height=2, structures_to_ignore=structures_to_break)
-	options += get_valid_sentry_turfs(left, top-7, z, width=2, height=6, structures_to_ignore=structures_to_break)
+	if(GLOB.sentry_spawns[dropship_type]?[SENTRY_TOP_LEFT])
+		options += GLOB.sentry_spawns[dropship_type][SENTRY_TOP_LEFT]
+	else
+		options += get_valid_sentry_turfs(left, top-1, z, width=5, height=2, structures_to_ignore=structures_to_break)
+		options += get_valid_sentry_turfs(left, top-7, z, width=2, height=6, structures_to_ignore=structures_to_break)
 	spawn_lz_sentry(pick(options), structures_to_break)
 
 	// Top right
 	options.Cut()
-	options += get_valid_sentry_turfs(right-4, top-1, z, width=5, height=2, structures_to_ignore=structures_to_break)
-	options += get_valid_sentry_turfs(right-1, top-7, z, width=2, height=6, structures_to_ignore=structures_to_break)
+	if(GLOB.sentry_spawns[dropship_type]?[SENTRY_TOP_RIGHT])
+		options += GLOB.sentry_spawns[dropship_type][SENTRY_TOP_RIGHT]
+	else
+		options += get_valid_sentry_turfs(right-4, top-1, z, width=5, height=2, structures_to_ignore=structures_to_break)
+		options += get_valid_sentry_turfs(right-1, top-7, z, width=2, height=6, structures_to_ignore=structures_to_break)
 	spawn_lz_sentry(pick(options), structures_to_break)
 
 ///Returns a list of non-dense turfs using the given block arguments ignoring the provided structure types
@@ -225,7 +244,11 @@
 			continue
 		for(var/turf/turf in area)
 			if(turf.density)
-				continue
+				if(!istype(turf, /turf/closed/wall))
+					continue
+				var/turf/closed/wall/wall = turf
+				if(wall.hull)
+					continue
 			lz_smoke += new /obj/effect/particle_effect/smoke/miasma(turf, null, new_cause_data)
 
 ///Clears miasma smoke in landing zones
@@ -233,6 +256,69 @@
 	for(var/obj/effect/particle_effect/smoke/miasma/smoke as anything in lz_smoke)
 		smoke.time_to_live = rand(1, 5)
 	lz_smoke.Cut()
+
+/// Called during the dropship flight, clears resin and indicates to those in flight that resin near the LZ has been cleared.
+/datum/game_mode/colonialmarines/proc/warn_resin_clear(obj/docking_port/mobile/marine_dropship)
+	clear_proximity_resin()
+
+	var/list/announcement_mobs = list()
+	for(var/area/area in marine_dropship.shuttle_areas)
+		for(var/mob/mob in area)
+			shake_camera(mob, steps = 3, strength = 1)
+			announcement_mobs += mob
+
+	announcement_helper("Dropship [marine_dropship.name] dispersing [/obj/effect/particle_effect/smoke/weedkiller::name] due to potential biological infestation.", MAIN_AI_SYSTEM, announcement_mobs, 'sound/effects/rocketpod_fire.ogg')
+
+/**
+ * Clears any built resin in the areas around the landing zone,
+ * when the dropship first deploys.
+ */
+/datum/game_mode/colonialmarines/proc/clear_proximity_resin()
+	var/datum/cause_data/cause_data = create_cause_data(/obj/effect/particle_effect/smoke/weedkiller::name)
+
+	for(var/area/near_area as anything in GLOB.all_areas)
+		var/area_lz = near_area.linked_lz
+		if(!area_lz)
+			continue
+
+		if(islist(area_lz))
+			if(!(active_lz.linked_lz in area_lz))
+				continue
+
+		else if(area_lz != active_lz.linked_lz)
+			continue
+
+		for(var/turf/turf in near_area)
+			if(turf.density)
+				if(!istype(turf, /turf/closed/wall))
+					continue
+				var/turf/closed/wall/wall = turf
+				if(wall.hull)
+					continue
+			new /obj/effect/particle_effect/smoke/weedkiller(turf, null, cause_data)
+
+		near_area.purge_weeds()
+
+	addtimer(CALLBACK(src, PROC_REF(allow_proximity_resin)), near_lz_protection_delay)
+
+/**
+ * If the area was previously weedable, and this was disabled by the
+ * LZ proximity, re-enable the weedability
+ */
+/datum/game_mode/colonialmarines/proc/allow_proximity_resin()
+	for(var/area/near_area as anything in GLOB.all_areas)
+		var/area_lz = near_area.linked_lz
+		if(!area_lz)
+			continue
+
+		if(area_lz != active_lz.linked_lz)
+			continue
+
+		if(initial(near_area.is_resin_allowed) == FALSE)
+			continue
+
+		near_area.is_resin_allowed = TRUE
+
 
 #define MONKEYS_TO_TOTAL_RATIO 1/32
 
@@ -399,6 +485,8 @@
 
 /datum/game_mode/colonialmarines/ds_first_drop(obj/docking_port/mobile/marine_dropship)
 	addtimer(CALLBACK(GLOBAL_PROC, GLOBAL_PROC_REF(show_blurb_uscm)), DROPSHIP_DROP_MSG_DELAY)
+	addtimer(CALLBACK(src, PROC_REF(warn_resin_clear), marine_dropship), DROPSHIP_DROP_FIRE_DELAY)
+
 	add_current_round_status_to_end_results("First Drop")
 	clear_lz_hazards()
 
@@ -518,7 +606,7 @@
 		GLOB.round_statistics.game_mode = name
 		GLOB.round_statistics.round_length = world.time
 		GLOB.round_statistics.round_result = round_finished
-		GLOB.round_statistics.end_round_player_population = GLOB.clients.len
+		GLOB.round_statistics.end_round_player_population = length(GLOB.clients)
 
 		GLOB.round_statistics.log_round_statistics()
 
@@ -637,7 +725,7 @@
 			total_marines += squad_marines_job_report[job_type]
 			total_squad_marines += squad_marines_job_report[job_type]
 			incrementer++
-			if(incrementer < squad_marines_job_report.len)
+			if(incrementer < length(squad_marines_job_report))
 				squad_marine_job_text += ", "
 
 		var/auxiliary_marine_job_text = ""
@@ -647,7 +735,7 @@
 			auxiliary_marine_job_text += "[job_type]: [auxiliary_marines_job_report[job_type]]"
 			total_marines += auxiliary_marines_job_report[job_type]
 			incrementer++
-			if(incrementer < auxiliary_marines_job_report.len)
+			if(incrementer < length(auxiliary_marines_job_report))
 				auxiliary_marine_job_text += ", "
 
 		var/total_non_standard = 0
@@ -658,7 +746,7 @@
 			non_standard_job_text += "[job_type]: [non_standard_job_report[job_type]]"
 			total_non_standard += non_standard_job_report[job_type]
 			incrementer++
-			if(incrementer < non_standard_job_report.len)
+			if(incrementer < length(non_standard_job_report))
 				non_standard_job_text += ", "
 
 		var/list/hive_xeno_numbers = list()
@@ -672,7 +760,7 @@
 				hive_caste_text += "[hive_caste]: [per_hive_status[hive_caste]]"
 				hive_amount += per_hive_status[hive_caste]
 				incrementer++
-				if(incrementer < per_hive_status.len)
+				if(incrementer < length(per_hive_status))
 					hive_caste_text += ", "
 			if(hive_amount)
 				hive_xeno_numbers[hive] = hive_amount

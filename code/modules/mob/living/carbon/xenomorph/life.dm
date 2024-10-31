@@ -11,7 +11,7 @@
 	..()
 
 	// replace this by signals or trait signals
-	if(is_zoomed && (stat || body_position == LYING_DOWN))
+	if(!HAS_TRAIT(src, TRAIT_ABILITY_SIGHT_IGNORE_REST) && is_zoomed && (stat || body_position == LYING_DOWN))
 		zoom_out()
 
 	if(stat != DEAD) //Stop if dead. Performance boost
@@ -220,7 +220,7 @@
 
 /mob/living/carbon/xenomorph/proc/handle_stomach_contents()
 	//Deal with dissolving/damaging stuff in stomach.
-	if(stomach_contents.len)
+	if(length(stomach_contents))
 		for(var/atom/movable/M in stomach_contents)
 			if(ishuman(M))
 				if(world.time > devour_timer - 50 && world.time < devour_timer - 30)
@@ -481,7 +481,7 @@ Make sure their actual health updates immediately.*/
 	if(status_flags & GODMODE)
 		health = maxHealth
 		set_stat(CONSCIOUS)
-	else if(xeno_shields.len != 0)
+	else if(length(xeno_shields) != 0)
 		overlay_shields()
 		health = maxHealth - getFireLoss() - getBruteLoss()
 	else

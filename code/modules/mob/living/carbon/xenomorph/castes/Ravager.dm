@@ -74,7 +74,7 @@
 /datum/behavior_delegate/ravager_base
 	var/shield_decay_time = 15 SECONDS // Time in deciseconds before our shield decays
 	var/slash_charge_cdr = 3 SECONDS // Amount to reduce charge cooldown by per slash
-	var/knockdown_amount = 1.3
+	var/knockdown_amount = 1.6
 	var/fling_distance = 3
 	var/empower_targets = 0
 	var/super_empower_threshold = 3
@@ -90,7 +90,7 @@
 /datum/behavior_delegate/ravager_base/melee_attack_additional_effects_self()
 	..()
 
-	var/datum/action/xeno_action/activable/pounce/charge/cAction = get_xeno_action_by_type(bound_xeno, /datum/action/xeno_action/activable/pounce/charge)
+	var/datum/action/xeno_action/activable/pounce/charge/cAction = get_action(bound_xeno, /datum/action/xeno_action/activable/pounce/charge)
 	if (!cAction.action_cooldown_check())
 		cAction.reduce_cooldown(slash_charge_cdr)
 

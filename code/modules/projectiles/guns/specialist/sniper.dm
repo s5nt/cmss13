@@ -62,22 +62,21 @@
 		ACTIONS SPECIALSIT SNIPER CAN TAKE
 */
 /datum/action/item_action/specialist/aimed_shot/action_activate()
+	. = ..()
 	if(!ishuman(owner))
 		return
 	var/mob/living/carbon/human/H = owner
 	if(H.selected_ability == src)
-		to_chat(H, "You will no longer use [name] with \
-			[H.client && H.client.prefs && H.client.prefs.toggle_prefs & TOGGLE_MIDDLE_MOUSE_CLICK ? "middle-click" : "shift-click"].")
+		to_chat(H, "You will no longer use [name] with [H.get_ability_mouse_name()].")
 		button.icon_state = "template"
-		H.selected_ability = null
+		H.set_selected_ability(null)
 	else
-		to_chat(H, "You will now use [name] with \
-			[H.client && H.client.prefs && H.client.prefs.toggle_prefs & TOGGLE_MIDDLE_MOUSE_CLICK ? "middle-click" : "shift-click"].")
+		to_chat(H, "You will now use [name] with [H.get_ability_mouse_name()].")
 		if(H.selected_ability)
 			H.selected_ability.button.icon_state = "template"
-			H.selected_ability = null
+			H.set_selected_ability(null)
 		button.icon_state = "template_on"
-		H.selected_ability = src
+		H.set_selected_ability(src)
 
 /datum/action/item_action/specialist/aimed_shot/can_use_action()
 	var/mob/living/carbon/human/H = owner
@@ -222,7 +221,7 @@
 
 /datum/action/item_action/specialist/aimed_shot/proc/check_shot_is_blocked(mob/firer, mob/target, obj/projectile/P)
 	var/list/turf/path = get_line(firer, target, include_start_atom = FALSE)
-	if(!path.len || get_dist(firer, target) > P.ammo.max_range)
+	if(!length(path) || get_dist(firer, target) > P.ammo.max_range)
 		return TRUE
 
 	var/blocked = FALSE
@@ -276,6 +275,7 @@
 	return TRUE
 
 /datum/action/item_action/specialist/toggle_laser/action_activate()
+	. = ..()
 	var/obj/item/weapon/gun/rifle/sniper/sniper_rifle = holder_item
 
 	if(owner.get_held_item() != sniper_rifle)
@@ -313,7 +313,7 @@
 	icon_state = "m42a"
 	item_state = "m42a"
 	unacidable = TRUE
-	indestructible = 1
+	explo_proof = TRUE
 
 	fire_sound = 'sound/weapons/gun_sniper.ogg'
 	current_mag = /obj/item/ammo_magazine/sniper
@@ -367,7 +367,7 @@
 	icon_state = "xm43e1"
 	item_state = "xm43e1"
 	unacidable = TRUE
-	indestructible = 1
+	explo_proof = TRUE
 	aiming_time = 2 SECONDS
 	aimed_shot_cooldown_delay = 4.5 SECONDS
 	var/focused_fire_counter = 0

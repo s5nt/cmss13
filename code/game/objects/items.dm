@@ -4,6 +4,7 @@
 	mouse_drag_pointer = MOUSE_ACTIVE_POINTER
 	layer = ITEM_LAYER
 	light_system = MOVABLE_LIGHT
+	blocks_emissive = EMISSIVE_BLOCK_GENERIC
 	/// this saves our blood splatter overlay, which will be processed not to go over the edges of the sprite
 	var/image/blood_overlay = null
 	var/randpixel = 6
@@ -162,6 +163,11 @@
 	var/ground_offset_x = 0
 	/// How much to offset the item randomly either way alongside Y visually
 	var/ground_offset_y = 0
+	/// bypass any species specific OnMob overlay blockers
+	var/force_overlays_on = FALSE
+
+	/// Special storages this item prioritizes
+	var/list/preferred_storage
 
 /obj/item/Initialize(mapload, ...)
 	. = ..()
@@ -207,15 +213,15 @@
 	switch(severity)
 		if(0 to EXPLOSION_THRESHOLD_LOW)
 			if(prob(5))
-				if(!indestructible)
+				if(!explo_proof)
 					visible_message(SPAN_DANGER(SPAN_UNDERLINE("\The [src] [msg]")))
 					deconstruct(FALSE)
 		if(EXPLOSION_THRESHOLD_LOW to EXPLOSION_THRESHOLD_MEDIUM)
 			if(prob(50))
-				if(!indestructible)
+				if(!explo_proof)
 					deconstruct(FALSE)
 		if(EXPLOSION_THRESHOLD_MEDIUM to INFINITY)
-			if(!indestructible)
+			if(!explo_proof)
 				visible_message(SPAN_DANGER(SPAN_UNDERLINE("\The [src] [msg]")))
 				deconstruct(FALSE)
 
@@ -244,9 +250,9 @@ cases. Override_icon_state should be a list.*/
 	var/new_icon_state
 	var/new_protection
 	var/new_item_state
-	if(override_icon_state && override_icon_state.len)
+	if(LAZYLEN(override_icon_state))
 		new_icon_state = override_icon_state[SSmapping.configs[GROUND_MAP].map_name]
-	if(override_protection && override_protection.len)
+	if(LAZYLEN(override_protection))
 		new_protection = override_protection[SSmapping.configs[GROUND_MAP].map_name]
 	switch(SSmapping.configs[GROUND_MAP].camouflage_type)
 		if("snow")
@@ -277,7 +283,7 @@ cases. Override_icon_state should be a list.*/
 			size = "huge"
 		if(SIZE_MASSIVE)
 			size = "massive"
-	. += "This is a [blood_color ? blood_color != COLOR_OIL ? "bloody " : "oil-stained " : ""][icon2html(src, user)][src.name]. It is a [size] item."
+	. += "[p_are() == "are" ? "These are " : "This is a "][blood_color ? blood_color != COLOR_OIL ? "bloody " : "oil-stained " : ""][icon2html(src, user)][src.name]. [p_they(TRUE)] [p_are()] a [size] item."
 	if(desc)
 		. += desc
 	if(desc_lore)

@@ -61,6 +61,7 @@
 	var/own_orbit_size = 0
 	var/observer_actions = list(/datum/action/observer_action/join_xeno, /datum/action/observer_action/join_lesser_drone)
 	var/datum/action/minimap/observer/minimap
+	///The last message for this player with their larva queue information
 	var/larva_queue_cached_message
 	///Used to bypass time of death checks such as when being selected for larva.
 	var/bypass_time_of_death_checks = FALSE
@@ -376,35 +377,38 @@
 	if(!client || !client.prefs)
 		return
 
-	var/datum/mob_hud/H
+	var/datum/mob_hud/the_hud
 	HUD_toggled = client.prefs.observer_huds
 	for(var/i in HUD_toggled)
 		if(HUD_toggled[i])
 			switch(i)
 				if("Medical HUD")
-					H = GLOB.huds[MOB_HUD_MEDICAL_OBSERVER]
-					H.add_hud_to(src, src)
+					the_hud = GLOB.huds[MOB_HUD_MEDICAL_OBSERVER]
+					the_hud.add_hud_to(src, src)
 				if("Security HUD")
-					H = GLOB.huds[MOB_HUD_SECURITY_ADVANCED]
-					H.add_hud_to(src, src)
+					the_hud= GLOB.huds[MOB_HUD_SECURITY_ADVANCED]
+					the_hud.add_hud_to(src, src)
 				if("Squad HUD")
-					H = GLOB.huds[MOB_HUD_FACTION_OBSERVER]
-					H.add_hud_to(src, src)
+					the_hud= GLOB.huds[MOB_HUD_FACTION_OBSERVER]
+					the_hud.add_hud_to(src, src)
 				if("Xeno Status HUD")
-					H = GLOB.huds[MOB_HUD_XENO_STATUS]
-					H.add_hud_to(src, src)
+					the_hud= GLOB.huds[MOB_HUD_XENO_STATUS]
+					the_hud.add_hud_to(src, src)
 				if("Faction UPP HUD")
-					H = GLOB.huds[MOB_HUD_FACTION_UPP]
-					H.add_hud_to(src, src)
+					the_hud= GLOB.huds[MOB_HUD_FACTION_UPP]
+					the_hud.add_hud_to(src, src)
 				if("Faction Wey-Yu HUD")
-					H = GLOB.huds[MOB_HUD_FACTION_WY]
-					H.add_hud_to(src, src)
+					the_hud= GLOB.huds[MOB_HUD_FACTION_WY]
+					the_hud.add_hud_to(src, src)
 				if("Faction TWE HUD")
-					H = GLOB.huds[MOB_HUD_FACTION_TWE]
-					H.add_hud_to(src, src)
+					the_hud= GLOB.huds[MOB_HUD_FACTION_TWE]
+					the_hud.add_hud_to(src, src)
 				if("Faction CLF HUD")
-					H = GLOB.huds[MOB_HUD_FACTION_CLF]
-					H.add_hud_to(src, src)
+					the_hud= GLOB.huds[MOB_HUD_FACTION_CLF]
+					the_hud.add_hud_to(src, src)
+				if(HUD_MENTOR_SIGHT)
+					the_hud= GLOB.huds[MOB_HUD_NEW_PLAYER]
+					the_hud.add_hud_to(src, src)
 
 	see_invisible = INVISIBILITY_OBSERVER
 
@@ -628,7 +632,7 @@ This is the proc mobs get to turn into a ghost. Forked from ghostize due to comp
 
 	var/value = SStechtree.trees[1]
 
-	if(trees.len > 1)
+	if(length(trees) > 1)
 		value = tgui_input_list(src, "Choose which tree to enter", "Enter Tree", trees)
 
 	if(!value)
@@ -655,14 +659,14 @@ This is the proc mobs get to turn into a ghost. Forked from ghostize due to comp
 	for(var/turf/T in get_area_turfs(thearea.type))
 		L+=T
 
-	if(!L || !L.len)
+	if(!LAZYLEN(L))
 		to_chat(src, "<span style='color: red;'>No area available.</span>")
 		return
 
 	usr.forceMove(pick(L))
 	following = null
 
-/mob/dead/observer/proc/scan_health(mob/living/target in view(src.client))
+/mob/dead/observer/proc/scan_health(mob/living/target in GLOB.living_mob_list)
 	set name = "Scan Health"
 
 	if(!istype(target))
@@ -695,7 +699,7 @@ This is the proc mobs get to turn into a ghost. Forked from ghostize due to comp
 		last_health_display.target_mob = target
 	last_health_display.look_at(src, DETAIL_LEVEL_FULL, bypass_checks = TRUE)
 
-/mob/dead/observer/verb/follow_local(mob/target)
+/mob/dead/observer/verb/follow_local(mob/target in GLOB.mob_list)
 	set category = "Ghost.Follow"
 	set name = "Follow Local Mob"
 	set desc = "Follow on-screen mob"
@@ -879,7 +883,7 @@ This is the proc mobs get to turn into a ghost. Forked from ghostize due to comp
 	var/datum/hive_status/hive
 	for(var/hivenumber in GLOB.hive_datum)
 		hive = GLOB.hive_datum[hivenumber]
-		if(hive.totalXenos.len > 0)
+		if(length(hive.totalXenos) > 0)
 			hives += list("[hive.name]" = hive.hivenumber)
 			last_hive_checked = hive
 
@@ -1038,7 +1042,9 @@ This is the proc mobs get to turn into a ghost. Forked from ghostize due to comp
 	for(var/role in mobs_by_role)
 		for(var/freed_mob in mobs_by_role[role])
 			freed_mob_choices["[freed_mob] ([role])"] = freed_mob
-
+	if(!length(freed_mob_choices))
+		to_chat(src, SPAN_WARNING("There are no Freed Mobs available."))
+		return
 	var/choice = tgui_input_list(usr, "Pick a Freed Mob:", "Join as Freed Mob", freed_mob_choices)
 	if(!choice)
 		return

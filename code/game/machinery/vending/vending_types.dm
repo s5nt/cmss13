@@ -277,8 +277,8 @@
 	)
 
 /obj/structure/machinery/vending/sea
-	name = "\improper SeaTech"
-	desc = "An equipment vendor designed to save lives"
+	name = "\improper SEATech"
+	desc = "An equipment vendor designed to save lives."
 	product_ads = "Semper Fi!;First to Fight!;Ooh Rah.;Leathernecks!;The Few. The Proud.;Esprit de Corps;Jarhead.;Devil Dogs."
 	icon_state = "sec"
 	icon_deny = "sec-deny"
@@ -296,6 +296,7 @@
 		/obj/item/storage/firstaid/fire = 2,
 		/obj/item/storage/firstaid/rad = 1,
 		/obj/item/device/radio/headset = 6,
+		/obj/item/tool/crew_monitor = 1,
 	)
 	contraband = list(/obj/item/storage/fancy/cigar = 2,/obj/item/tool/lighter/zippo = 2)
 

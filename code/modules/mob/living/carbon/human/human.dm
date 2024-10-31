@@ -133,7 +133,7 @@
 			. += "Self Destruct Status: [SShijack.get_sd_eta()]"
 
 /mob/living/carbon/human/ex_act(severity, direction, datum/cause_data/cause_data)
-	if(body_position == LYING_DOWN)
+	if(body_position == LYING_DOWN && direction)
 		severity *= EXPLOSION_PRONE_MULTIPLIER
 
 
@@ -350,10 +350,10 @@
 		return "[face_name] (as [id_name])"
 	return face_name
 
-//Returns "Unknown" if facially disfigured and real_name if not. Useful for setting name when polyacided or when updating a human's name variable
+//Returns "Unknown" if facially unidentifiable and real_name if not. Useful for setting name when headless or when updating a human's name variable
 /mob/living/carbon/human/proc/get_face_name()
 	var/obj/limb/head/head = get_limb("head")
-	if(!head || head.disfigured || (head.status & LIMB_DESTROYED) || !real_name) //disfigured. use id-name if possible
+	if(!head || (head.status & LIMB_DESTROYED) || !real_name) //unidentifiable. use id-name if possible
 		return "Unknown"
 	return real_name
 
@@ -408,6 +408,7 @@
 							DT.dogtag_taken = TRUE
 							DT.icon_state = "dogtag_taken"
 							var/obj/item/dogtag/D = new(loc)
+							D.fallen_references = list(DT.registered_ref)
 							D.fallen_names = list(DT.registered_name)
 							D.fallen_assgns = list(DT.assignment)
 							D.fallen_blood_types = list(DT.blood_type)
@@ -907,9 +908,6 @@
 	var/obj/limb/head/h = get_limb("head")
 	if(QDELETED(h))
 		h = get_limb("synthetic head")
-	else
-		h.disfigured = 0
-	name = get_visible_name()
 
 	if(species && !(species.flags & NO_BLOOD))
 		restore_blood()
@@ -946,6 +944,11 @@
 
 	..()
 
+/// Returns whether this person has a broken heart but is otherwise revivable
+/mob/living/carbon/human/proc/is_heart_broken()
+	var/datum/internal_organ/heart/heart = internal_organs_by_name["heart"]
+	return heart && heart.organ_status >= ORGAN_BROKEN && check_tod() && is_revivable(ignore_heart = TRUE)
+
 /mob/living/carbon/human/proc/is_lung_ruptured()
 	var/datum/internal_organ/lungs/L = internal_organs_by_name["lungs"]
 	return L && L.organ_status >= ORGAN_BRUISED
@@ -956,7 +959,6 @@
 	if(L && !L.organ_status >= ORGAN_BRUISED)
 		src.custom_pain("You feel a stabbing pain in your chest!", 1)
 		L.damage = L.min_bruised_damage
-
 
 /mob/living/carbon/human/get_visible_implants(class = 0)
 	var/list/visible_objects = list()
@@ -1000,8 +1002,8 @@
 
 	if(self)
 		var/list/L = get_broken_limbs() - list("chest","head","groin")
-		if(L.len > 0)
-			msg += "Your [english_list(L)] [L.len > 1 ? "are" : "is"] broken\n"
+		if(length(L) > 0)
+			msg += "Your [english_list(L)] [length(L) > 1 ? "are" : "is"] broken\n"
 	to_chat(usr,SPAN_NOTICE("You [self ? "take a moment to analyze yourself":"start analyzing [src]"]"))
 	if(toxloss > 20)
 		msg += "[self ? "Your" : "Their"] skin is slightly green\n"
@@ -1041,7 +1043,7 @@
 	show_browser(src, dat, "Crew Manifest", "manifest", "size=400x750")
 
 /mob/living/carbon/human/verb/view_objective_memory()
-	set name = "View objectives"
+	set name = "View intel objectives"
 	set category = "IC"
 
 	if(!mind)
@@ -1062,7 +1064,7 @@
 		to_chat(src, "The game appears to have misplaced your mind datum.")
 		return
 
-	if(!skillcheck(usr, SKILL_RESEARCH, SKILL_RESEARCH_TRAINED) || faction != FACTION_MARINE && !(faction in FACTION_LIST_WY))
+	if(!skillcheck(usr, SKILL_RESEARCH, SKILL_RESEARCH_TRAINED) || !(FACTION_MARINE in get_id_faction_group()))
 		to_chat(usr, SPAN_WARNING("You have no access to the [MAIN_SHIP_NAME] research network."))
 		return
 
@@ -1259,6 +1261,11 @@
 		if(TRACKER_XO)
 			H = GLOB.marine_leaders[JOB_XO]
 			tracking_suffix = "_xo"
+		if(TRACKER_CMP)
+			var/datum/job/command/warrant/cmp_job = GLOB.RoleAuthority.roles_for_mode[JOB_CHIEF_POLICE]
+			if(cmp_job?.active_cmp)
+				H = cmp_job.active_cmp
+			tracking_suffix = "_cmp"
 		if(TRACKER_CL)
 			var/datum/job/civilian/liaison/liaison_job = GLOB.RoleAuthority.roles_for_mode[JOB_CORPORATE_LIAISON]
 			if(liaison_job?.active_liaison)
@@ -1343,11 +1350,14 @@
 	if(wear_mask && wear_mask.vision_impair)
 		tint_level += wear_mask.vision_impair
 
-	if(tint_level > VISION_IMPAIR_STRONG)
-		tint_level = VISION_IMPAIR_STRONG
+	if(tint_level > VISION_IMPAIR_MAX)
+		tint_level = VISION_IMPAIR_MAX
 
 	if(tint_level)
-		overlay_fullscreen("tint", /atom/movable/screen/fullscreen/impaired, tint_level)
+		if(tint_level == VISION_IMPAIR_MAX)
+			overlay_fullscreen("tint", /atom/movable/screen/fullscreen/blind)
+		else
+			overlay_fullscreen("tint", /atom/movable/screen/fullscreen/impaired, tint_level)
 		return TRUE
 	else
 		clear_fullscreen("tint", 0)
@@ -1391,7 +1401,8 @@
 		if(user.get_limb(cur_hand).status & LIMB_DESTROYED)
 			to_chat(user, SPAN_WARNING("You cannot remove splints without a hand."))
 			return
-		for(var/bodypart in list("l_leg","r_leg","l_arm","r_arm","r_hand","l_hand","r_foot","l_foot","chest","head","groin"))
+		var/is_splint = FALSE
+		for(var/bodypart in list("l_leg","r_leg","l_arm","r_arm","r_hand","l_hand","r_foot","l_foot","chest","head","groin")) //check for any splints before do_after
 			var/obj/limb/l = target.get_limb(bodypart)
 			if(l && (l.status & LIMB_SPLINTED))
 				if(user == target)
@@ -1401,16 +1412,34 @@
 					if((bodypart in list("r_arm", "r_hand")) && (cur_hand == "r_hand"))
 						same_arm_side = TRUE
 						continue
-				to_splint.Add(l)
+				is_splint = TRUE
+				break
 
 		var/msg = "" // Have to use this because there are issues with the to_chat macros and text macros and quotation marks
-		if(to_splint.len)
+		if(is_splint)
 			if(do_after(user, HUMAN_STRIP_DELAY * user.get_skill_duration_multiplier(SKILL_MEDICAL), INTERRUPT_ALL, BUSY_ICON_GENERIC, target, INTERRUPT_MOVED, BUSY_ICON_GENERIC))
 				var/can_reach_splints = TRUE
 				var/amount_removed = 0
+				for(var/bodypart in list("l_leg","r_leg","l_arm","r_arm","r_hand","l_hand","r_foot","l_foot","chest","head","groin")) // make sure the splints still exist before removing
+					var/obj/limb/target_limb = target.get_limb(bodypart)
+					if(target_limb && (target_limb.status & LIMB_SPLINTED))
+						if(user == target)
+							if((bodypart in list("l_arm", "l_hand")) && (cur_hand == "l_hand"))
+								same_arm_side = TRUE
+								continue
+							if((bodypart in list("r_arm", "r_hand")) && (cur_hand == "r_hand"))
+								same_arm_side = TRUE
+								continue
+						to_splint += target_limb
+				if(!length(to_splint))
+					if(same_arm_side)
+						to_chat(user, SPAN_WARNING("You need to use the opposite hand to remove the splints on your arm and hand!"))
+					else
+						to_chat(user, SPAN_WARNING("There are no splints to remove."))
+					return
 				if(wear_suit && istype(wear_suit,/obj/item/clothing/suit/space))
 					var/obj/item/clothing/suit/space/suit = target.wear_suit
-					if(suit.supporting_limbs && suit.supporting_limbs.len)
+					if(LAZYLEN(suit.supporting_limbs))
 						msg = "[user == target ? "your":"\proper [target]'s"]"
 						to_chat(user, SPAN_WARNING("You cannot remove the splints, [msg] [suit] is supporting some of the breaks."))
 						can_reach_splints = FALSE
@@ -1483,6 +1512,8 @@
 /mob/living/carbon/human/synthetic/second/Initialize(mapload)
 	. = ..(mapload, SYNTH_GEN_TWO)
 
+/mob/living/carbon/human/synthetic/synth_k9/Initialize(mapload)
+	. = ..(mapload, SYNTH_K9)
 
 /mob/living/carbon/human/resist_fire()
 	if(isyautja(src))
@@ -1707,15 +1738,15 @@
 
 /mob/living/carbon/human/on_knockedout_trait_gain(datum/source)
 	. = ..()
-	
+
 	update_execute_hud()
-	
+
 	return .
 
 /mob/living/carbon/human/on_knockedout_trait_loss(datum/source)
 	. = ..()
 
 	update_execute_hud()
-	
+
 	return .
-	
+

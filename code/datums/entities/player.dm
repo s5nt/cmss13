@@ -509,6 +509,8 @@ BSQL_PROTECT_DATUM(/datum/entity/player)
 		error("ALARM: MISMATCH. Loaded player data for client [ckey], player data ckey is [player.ckey], id: [player.id]")
 	player_data = player
 	player_data.owning_client = src
+	if(!player_data.discord_link_id)
+		add_verb(src, /client/proc/discord_connect)
 	if(!player_data.last_login)
 		player_data.first_join_date = "[time2text(world.realtime, "YYYY-MM-DD hh:mm:ss")]"
 	if(!player_data.first_join_date)
@@ -606,14 +608,14 @@ BSQL_PROTECT_DATUM(/datum/entity/player)
 			note.admin_rank = "N/A"
 		note.date = I.timestamp
 		var/list/splitting = splittext(I.content, "|")
-		if(splitting.len == 1)
+		if(length(splitting) == 1)
 			note.text = I.content
 			note.is_ban = FALSE
-		if(splitting.len == 3)
+		if(length(splitting) == 3)
 			note.text = splitting[3]
 			note.ban_time = text2num(replacetext(replacetext(splitting[2],"Duration: ","")," minutes",""))
 			note.is_ban = TRUE
-		if(splitting.len == 2)
+		if(length(splitting) == 2)
 			note.text = I.content
 			note.is_ban = TRUE
 

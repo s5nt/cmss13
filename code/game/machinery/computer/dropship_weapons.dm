@@ -8,7 +8,7 @@
 	circuit = null
 	unslashable = TRUE
 	unacidable = TRUE
-	exproof = TRUE
+	explo_proof = TRUE
 	var/shuttle_tag  // Used to know which shuttle we're linked to.
 	var/obj/structure/dropship_equipment/selected_equipment //the currently selected equipment installed on the shuttle this console controls.
 	var/cavebreaker = FALSE //ignore caves and other restrictions?
@@ -313,9 +313,25 @@
 					var/obj/structure/machinery/defenses/sentry/defense = sentry.deployed_turret
 					if(defense.has_camera)
 						defense.set_range()
-						var/datum/shape/rectangle/current_bb = defense.range_bounds
 						camera_area_equipment = sentry
-						SEND_SIGNAL(src, COMSIG_CAMERA_SET_AREA, current_bb.center_x, current_bb.center_y, defense.loc.z, current_bb.width, current_bb.height)
+						SEND_SIGNAL(src, COMSIG_CAMERA_SET_AREA, defense.range_bounds, defense.loc.z)
+				return TRUE
+
+		if("auto-deploy")
+			var/equipment_tag = params["equipment_id"]
+			for(var/obj/structure/dropship_equipment/equipment as anything in shuttle.equipments)
+				var/mount_point = equipment.ship_base.attach_id
+				if(mount_point != equipment_tag)
+					continue
+
+				if(istype(equipment, /obj/structure/dropship_equipment/sentry_holder))
+					var/obj/structure/dropship_equipment/sentry_holder/sentry = equipment
+					sentry.auto_deploy = !sentry.auto_deploy
+					return TRUE
+
+				if(istype(equipment, /obj/structure/dropship_equipment/mg_holder))
+					var/obj/structure/dropship_equipment/mg_holder/mg = equipment
+					mg.auto_deploy = !mg.auto_deploy
 				return TRUE
 
 		if("clear-camera")
@@ -581,8 +597,8 @@
 	for(var/datum/cas_fire_mission_record/firerec as anything in editing_firemission.records)
 		var/gimbal = firerec.get_offsets()
 		var/ammo = firerec.get_ammo()
-		var/offsets = new /list(firerec.offsets.len)
-		for(var/idx = 1; idx < firerec.offsets.len; idx++)
+		var/offsets = new /list(length(firerec.offsets))
+		for(var/idx = 1; idx < length(firerec.offsets); idx++)
 			offsets[idx] = firerec.offsets[idx] == null ? "-" : firerec.offsets[idx]
 			. += list(
 				"name" = sanitize(copytext(firerec.weapon.name, 1, 50)),
@@ -738,7 +754,7 @@
 	if(!skillcheck(weapon_operator, SKILL_PILOT, SKILL_PILOT_TRAINED)) //only pilots can fire dropship weapons.
 		to_chat(weapon_operator, SPAN_WARNING("A screen with graphics and walls of physics and engineering values open, you immediately force it closed."))
 		return FALSE
-	if(firemission_tag > firemission_envelope.missions.len)
+	if(firemission_tag > length(firemission_envelope.missions))
 		to_chat(weapon_operator, SPAN_WARNING("Fire Mission ID corrupted or already deleted."))
 		return FALSE
 	if(selected_firemission == firemission_envelope.missions[firemission_tag])
@@ -757,7 +773,7 @@
 	if(firemission_envelope.stat > FIRE_MISSION_STATE_IN_TRANSIT && firemission_envelope.stat < FIRE_MISSION_STATE_COOLDOWN)
 		to_chat(weapon_operator, SPAN_WARNING("Fire Mission already underway."))
 		return FALSE
-	if(firemission_tag > firemission_envelope.missions.len)
+	if(firemission_tag > length(firemission_envelope.missions))
 		to_chat(weapon_operator, SPAN_WARNING("Fire Mission ID corrupted or deleted."))
 		return FALSE
 	if(selected_firemission == firemission_envelope.missions[firemission_tag])
@@ -890,6 +906,12 @@
 	req_one_access = list(ACCESS_MARINE_LEADER, ACCESS_MARINE_DROPSHIP, ACCESS_WY_FLIGHT)
 	firemission_envelope = new /datum/cas_fire_envelope/uscm_dropship()
 	shuttle_tag = DROPSHIP_NORMANDY
+
+/obj/structure/machinery/computer/dropship_weapons/dropship3
+	name = "\improper 'Saipan' weapons controls"
+	req_one_access = list(ACCESS_MARINE_LEADER, ACCESS_MARINE_DROPSHIP, ACCESS_WY_FLIGHT)
+	firemission_envelope = new /datum/cas_fire_envelope/uscm_dropship()
+	shuttle_tag = DROPSHIP_SAIPAN
 
 /obj/structure/machinery/computer/dropship_weapons/Destroy()
 	. = ..()

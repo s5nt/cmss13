@@ -242,6 +242,20 @@
 /obj/effect/particle_effect/smoke/miasma/ex_act(severity)
 	return
 
+/obj/effect/particle_effect/smoke/weedkiller
+	name = "C10-W Weedkiller"
+	amount = 1
+	time_to_live = 15
+	smokeranking = SMOKE_RANK_HARMLESS
+	opacity = FALSE
+	color = "#c2aac7"
+	alpha = 0
+
+/obj/effect/particle_effect/smoke/weedkiller/Initialize(mapload, oldamount, datum/cause_data/new_cause_data)
+	. = ..()
+
+	animate(src, alpha = 75, time = rand(1 SECONDS, 5 SECONDS))
+
 /////////////////////////////////////////////
 // Sleep smoke
 /////////////////////////////////////////////
@@ -731,7 +745,7 @@
 		location = get_turf(loca)
 	if(direct)
 		direction = direct
-	if(lifetime)
+	if(smoke_time)
 		lifetime = smoke_time
 	radius = min(radius, 10)
 	amount = radius

@@ -111,9 +111,9 @@
 	var/mob/living/carbon/xenomorph/X = owner
 	if(!X.check_state())
 		return
-	for(var/i in 1 to X.caste.spit_types.len)
+	for(var/i in 1 to length(X.caste.spit_types))
 		if(X.ammo == GLOB.ammo_list[X.caste.spit_types[i]])
-			if(i == X.caste.spit_types.len)
+			if(i == length(X.caste.spit_types))
 				X.ammo = GLOB.ammo_list[X.caste.spit_types[1]]
 			else
 				X.ammo = GLOB.ammo_list[X.caste.spit_types[i+1]]
@@ -132,7 +132,7 @@
 		to_chat(X, SPAN_WARNING("We cannot regurgitate here."))
 		return
 
-	if(X.stomach_contents.len)
+	if(length(X.stomach_contents))
 		for(var/mob/living/M in X.stomach_contents)
 			// Also has good reason to be a proc on all Xenos
 			X.regurgitate(M, TRUE)
@@ -367,7 +367,7 @@
 		SEND_SIGNAL(src, COMSIG_XENO_START_EMIT_PHEROMONES, pheromone)
 		playsound(loc, "alien_drool", 25)
 
-	if(isqueen(src) && hive && hive.xeno_leader_list.len && anchored)
+	if(isqueen(src) && hive && length(hive.xeno_leader_list) && anchored)
 		for(var/mob/living/carbon/xenomorph/L in hive.xeno_leader_list)
 			L.handle_xeno_leader_pheromones()
 
@@ -398,7 +398,7 @@
 		return
 
 	if(X.layer == XENO_HIDING_LAYER) //Xeno is currently hiding, unhide him
-		var/datum/action/xeno_action/onclick/xenohide/hide = get_xeno_action_by_type(X, /datum/action/xeno_action/onclick/xenohide)
+		var/datum/action/xeno_action/onclick/xenohide/hide = get_action(X, /datum/action/xeno_action/onclick/xenohide)
 		if(hide)
 			hide.post_attack()
 
@@ -654,11 +654,19 @@
 	if(!spacecheck(X, T, structure_template))
 		return FALSE
 
+	if((choice == XENO_STRUCTURE_EGGMORPH) && locate(/obj/structure/flora/grass/tallgrass) in T)
+		to_chat(X, SPAN_WARNING("The tallgrass is preventing us from building the egg morpher!"))
+		qdel(structure_template)
+		return FALSE
+
 	if(!do_after(X, XENO_STRUCTURE_BUILD_TIME, INTERRUPT_NO_NEEDHAND|BEHAVIOR_IMMOBILE, BUSY_ICON_BUILD))
 		return FALSE
 
 	if(!spacecheck(X, T, structure_template)) //doublechecking
 		return FALSE
+
+	if(choice == XENO_STRUCTURE_CORE && AR.unoviable_timer)
+		to_chat(X, SPAN_WARNING("This area does not feel right for you to build this in."))
 
 	if((choice == XENO_STRUCTURE_CORE) && isqueen(X) && X.hive.has_structure(XENO_STRUCTURE_CORE))
 		if(X.hive.hive_location.hardcore || world.time > XENOMORPH_PRE_SETUP_CUTOFF)
@@ -709,11 +717,11 @@
 /datum/action/xeno_action/activable/place_construction/proc/spacecheck(mob/living/carbon/xenomorph/X, turf/T, datum/construction_template/xenomorph/tem)
 	if(tem.block_range)
 		for(var/turf/TA in range(tem.block_range, T))
-			if(!X.check_alien_construction(TA, FALSE, TRUE))
+			if(!X.check_alien_construction(TA, FALSE, TRUE, ignore_nest = TRUE))
 				to_chat(X, SPAN_WARNING("We need more open space to build here."))
 				qdel(tem)
 				return FALSE
-		if(!X.check_alien_construction(T))
+		if(!X.check_alien_construction(T, ignore_nest = TRUE))
 			to_chat(X, SPAN_WARNING("We need more open space to build here."))
 			qdel(tem)
 			return FALSE
@@ -911,7 +919,7 @@
 		to_chat(stabbing_xeno, SPAN_XENOWARNING("We must be above ground to do this."))
 		return
 
-	if(!stabbing_xeno.check_state())
+	if(!stabbing_xeno.check_state() || stabbing_xeno.cannot_slash)
 		return FALSE
 
 	var/pre_result = pre_ability_act(stabbing_xeno, targetted_atom)
@@ -926,7 +934,7 @@
 		return FALSE
 
 	var/distance = get_dist(stabbing_xeno, targetted_atom)
-	if(distance > 2)
+	if(distance > stab_range)
 		return FALSE
 
 	var/list/turf/path = get_line(stabbing_xeno, targetted_atom, include_start_atom = FALSE)
@@ -1019,13 +1027,12 @@
 	target.attack_log += text("\[[time_stamp()]\] <font color='orange'>was tailstabbed by [key_name(stabbing_xeno)]</font>")
 	stabbing_xeno.attack_log += text("\[[time_stamp()]\] <font color='red'>tailstabbed [key_name(target)]</font>")
 
-	stabbing_xeno.setDir(stab_direction)
-	stabbing_xeno.emote("tail")
-
-	/// Ditto.
-	var/new_dir = stabbing_xeno.dir
-
-	addtimer(CALLBACK(src, PROC_REF(reset_direction), stabbing_xeno, last_dir, new_dir), 0.5 SECONDS)
+	if(last_dir != stab_direction)
+		stabbing_xeno.setDir(stab_direction)
+		stabbing_xeno.emote("tail")
+		/// Ditto.
+		var/new_dir = stabbing_xeno.dir
+		addtimer(CALLBACK(src, PROC_REF(reset_direction), stabbing_xeno, last_dir, new_dir), 0.5 SECONDS)
 
 	stabbing_xeno.animation_attack_on(target)
 	stabbing_xeno.flick_attack_overlay(target, stab_overlay)
@@ -1038,7 +1045,10 @@
 		damage = stabbing_xeno.behavior_delegate.melee_attack_modify_damage(damage, target)
 
 	target.apply_armoured_damage(get_xeno_damage_slash(target, damage), ARMOR_MELEE, BRUTE, limb ? limb.name : "chest")
-	target.apply_effect(3, DAZE)
+	if(stabbing_xeno.mob_size >= MOB_SIZE_BIG)
+		target.apply_effect(3, DAZE)
+	else if(stabbing_xeno.mob_size == MOB_SIZE_XENO)
+		target.apply_effect(1, DAZE)
 	shake_camera(target, 2, 1)
 
 	target.handle_blood_splatter(get_dir(owner.loc, target.loc))

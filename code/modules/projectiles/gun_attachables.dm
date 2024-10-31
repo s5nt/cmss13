@@ -1054,6 +1054,7 @@ Defined in conflicts.dm of the #defines folder.
 	button.name = name
 
 /datum/action/item_action/toggle_zoom_level/action_activate()
+	. = ..()
 	var/obj/item/weapon/gun/G = holder_item
 	var/obj/item/attachable/scope/variable_zoom/S = G.attachments["rail"]
 	S.toggle_zoom_level()
@@ -1674,6 +1675,7 @@ Defined in conflicts.dm of the #defines folder.
 /datum/action/item_action/vulture
 
 /datum/action/item_action/vulture/action_activate()
+	. = ..()
 	var/obj/item/weapon/gun/gun_holder = holder_item
 	var/obj/item/attachable/vulture_scope/scope = gun_holder.attachments["rail"]
 	if(!istype(scope))
@@ -2384,6 +2386,33 @@ Defined in conflicts.dm of the #defines folder.
 /obj/item/attachable/stock/type71/New()
 	..()
 
+/obj/item/attachable/stock/m60
+	name = "M60 stock"
+	desc = "This isn't supposed to be separated from the gun, how'd this happen?"
+	icon = 'icons/obj/items/weapons/guns/attachments/stock.dmi'
+	icon_state = "m60_stock"
+	attach_icon = "m60_stock"
+	slot = "stock"
+	wield_delay_mod = WIELD_DELAY_NONE
+	flags_attach_features = NO_FLAGS
+	melee_mod = 15
+	size_mod = 0
+
+
+/obj/item/attachable/stock/ppsh
+	name = "PPSh-17b stock"
+	desc = "This isn't supposed to be separated from the gun, how'd this happen?"
+	icon = 'icons/obj/items/weapons/guns/attachments/stock.dmi'
+	icon_state = "ppsh17b_stock"
+	attach_icon = "ppsh17b_stock"
+	slot = "stock"
+	wield_delay_mod = WIELD_DELAY_NONE
+	flags_attach_features = NO_FLAGS
+	melee_mod = 10
+	size_mod = 0
+
+
+
 /obj/item/attachable/stock/smg
 	name = "submachinegun stock"
 	desc = "A rare ARMAT stock distributed in small numbers to USCM forces. Compatible with the M39, this stock reduces recoil and improves accuracy, but at a reduction to handling and agility. Seemingly a bit more effective in a brawl"
@@ -2960,24 +2989,30 @@ Defined in conflicts.dm of the #defines folder.
 /obj/item/attachable/attached_gun/flamer/handle_pre_break_attachment_description(base_description_text as text)
 	return base_description_text + " It is on [intense_mode ? "intense" : "normal"] mode."
 
-/obj/item/attachable/attached_gun/flamer/reload_attachment(obj/item/ammo_magazine/flamer_tank/FT, mob/user)
-	if(istype(FT))
-		if(current_rounds >= max_rounds)
+/obj/item/attachable/attached_gun/flamer/reload_attachment(obj/item/ammo_magazine/flamer_tank/fuel_holder, mob/user)
+	if(istype(fuel_holder))
+		var/amt_to_refill = max_rounds - current_rounds
+		if(!amt_to_refill)
 			to_chat(user, SPAN_WARNING("[src] is full."))
-		else if(FT.current_rounds <= 0)
-			to_chat(user, SPAN_WARNING("[FT] is empty!"))
-		else
-			playsound(user, 'sound/effects/refill.ogg', 25, 1, 3)
-			to_chat(user, SPAN_NOTICE("You refill [src] with [FT]."))
-			var/transfered_rounds = min(max_rounds - current_rounds, FT.current_rounds)
-			current_rounds += transfered_rounds
-			FT.current_rounds -= transfered_rounds
+			return
 
-			var/amount_of_reagents = FT.reagents.reagent_list.len
-			var/amount_removed_per_reagent = transfered_rounds / amount_of_reagents
-			for(var/datum/reagent/R in FT.reagents.reagent_list)
-				R.volume -= amount_removed_per_reagent
-			FT.update_icon()
+		var/datum/reagent/to_remove
+		if(length(fuel_holder.reagents.reagent_list))
+			to_remove = fuel_holder.reagents.reagent_list[1]
+
+		var/fuel_amt
+		if(to_remove)
+			fuel_amt = to_remove.volume < amt_to_refill ? to_remove.volume : amt_to_refill
+
+		if(!fuel_amt)
+			to_chat(user, SPAN_WARNING("[fuel_holder] is empty!"))
+			return
+
+		playsound(user, 'sound/effects/refill.ogg', 25, 1, 3)
+		to_chat(user, SPAN_NOTICE("You refill [src] with [fuel_holder]."))
+		current_rounds += fuel_amt
+		fuel_holder.reagents.remove_reagent(to_remove.id, fuel_amt)
+		fuel_holder.update_icon()
 	else
 		to_chat(user, SPAN_WARNING("[src] can only be refilled with an incinerator tank."))
 
@@ -3235,7 +3270,7 @@ Defined in conflicts.dm of the #defines folder.
 	ammo_datum.flamer_reagent_id = flamer_reagent.id
 	P.generate_bullet(ammo_datum)
 	P.icon_state = "naptha_ball"
-	P.color = flamer_reagent.color
+	P.color = flamer_reagent.burncolor
 	P.hit_effect_color = flamer_reagent.burncolor
 	P.fire_at(target, user, user, max_range, AMMO_SPEED_TIER_2, null)
 	var/turf/user_turf = get_turf(user)
@@ -3515,6 +3550,7 @@ Defined in conflicts.dm of the #defines folder.
 	button.overlays += image('icons/mob/hud/actions.dmi', button, action_icon_state)
 
 /datum/action/item_action/bipod/toggle_full_auto_switch/action_activate()
+	. = ..()
 	var/obj/item/weapon/gun/holder_gun = holder_item
 	var/obj/item/attachable/bipod/attached_bipod = holder_gun.attachments["under"]
 

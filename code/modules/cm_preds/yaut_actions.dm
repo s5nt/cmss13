@@ -25,7 +25,7 @@
 	mask = null
 
 	var/mob/living/carbon/human/mob = owner
-	if(!isyautja(mob))
+	if(!ishuman(mob))
 		return FALSE
 	if(mob.is_mob_incapacitated())
 		return FALSE
@@ -49,6 +49,7 @@
 	return TRUE
 
 /datum/action/predator_action/action_activate()
+	. = ..()
 	if(!can_use_action())
 		return FALSE
 
@@ -88,16 +89,6 @@
 /datum/action/predator_action/mark_panel/action_activate()
 	. = ..()
 	yautja.mark_panel()
-
-/datum/action/predator_action/claim_equipment
-	name = "Claim Equipment"
-	action_icon_state = "claim_equipment"
-	listen_signal = COMSIG_KB_YAUTJA_PRED_BUY
-	active = PREDATOR_ACTION_ON_CLICK
-
-/datum/action/predator_action/claim_equipment/action_activate()
-	. = ..()
-	yautja.pred_buy()
 
 //Actions that require wearing a mask
 /datum/action/predator_action/mask
@@ -154,21 +145,21 @@
 	require_bracers = TRUE
 
 /datum/action/predator_action/bracer/wristblade
-	name = "Toggle Wristblades"
+	name = "Use Bracer Attachments"
 	action_icon_state = "wristblade"
-	listen_signal = COMSIG_KB_YAUTJA_WRISTBLADES
+	listen_signal = COMSIG_KB_YAUTJA_BRACER_ATTACHMENT
 
 /datum/action/predator_action/bracer/wristblade/action_activate()
 	. = ..()
-	bracers.wristblades()
+	bracers.bracer_attachment()
 
-/datum/action/predator_action/bracer/combistick
-	name = "Yank Combi-stick"
+/datum/action/predator_action/bracer/chained
+	name = "Yank Weapon"
 	action_icon_state = "combi"
 	listen_signal = COMSIG_KB_YAUTJA_CALL_COMBI
 	active = PREDATOR_ACTION_ON_CLICK
 
-/datum/action/predator_action/bracer/combistick/action_activate()
+/datum/action/predator_action/bracer/chained/action_activate()
 	. = ..()
 	yautja.call_combi_internal(yautja, forced = FALSE)
 
@@ -248,6 +239,7 @@
 	action_icon_state = "looc_toggle"
 
 /datum/action/yautja_emote_panel/action_activate()
+	. = ..()
 	var/mob/living/carbon/human/human_owner = owner
 	var/datum/species/yautja/yautja_species = human_owner.species
 	yautja_species.open_emote_panel()
